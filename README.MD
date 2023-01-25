@@ -1,0 +1,1 @@
+Training project for learning FastAPI
