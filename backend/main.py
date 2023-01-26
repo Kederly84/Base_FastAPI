@@ -1,7 +1,9 @@
-from typing import List, Dict
-
-from fastapi import FastAPI
 from enum import Enum
+
+from fastapi import FastAPI, Query
+from pydantic import Required
+
+from models import Item
 
 app = FastAPI()
 
@@ -28,6 +30,9 @@ async def root() -> dict[str, str]:
 
 @app.get("/items/{item_id}")
 async def read_item(item_id: int, something: str) -> dict[str, int | str]:
+    """
+    Don't forget about query parameters in the URL. Specified without a slash.
+    """
     # Example url: http://127.0.0.1:8000/items/1?something=str
     return {'item_id': item_id, 'something': something}
 
@@ -35,7 +40,7 @@ async def read_item(item_id: int, something: str) -> dict[str, int | str]:
 @app.get('/items/method/{item_method}/')
 async def get_item(item_method: ItemMethod, skip: int | None = None, limit: int | None = None, name: str | None = None):
     """
-    This is  bad practice. Because func return value only if item_method value in values on ItemMethod.
+    This is bad practice. Because func return value only if item_method value in values in ItemMethod.
     Otherwise, it returns an error
     """
     if item_method.value == 'name':
@@ -105,3 +110,82 @@ async def read_file(file_path: str) -> dict[str, str]:
     # Example url http://127.0.0.1:8000/files//some_storage/some_file.txt
     # Pay attention to the double slash in the file address
     return {'file path': file_path}
+
+
+@app.get('/test/{test_id}')
+async def get_test(test_id: str, flag: str | None = None, desc: str | None = None) -> dict[str, str]:
+    test = {'test_id': test_id}
+    # Example url http://127.0.0.1:8000/test/one
+    if flag:
+        # Example url http://127.0.0.1:8000/test/one&flag=flag
+        test.update({'flag': flag})
+    if not desc:
+        # Example url http://127.0.0.1:8000/test/one&flag=flag
+        test.update({'description': "This is test sample"})
+    else:
+        # Example url http://127.0.0.1:8000/test/one?flag=Foo&desc=Some%20desc
+        test.update({'desc': desc})
+    return test
+
+
+@app.get('/test/{test_id}/test_item/{test_item_id}')
+async def read_test_item(test_id: str, test_item_id: int, desc: str | None = None, flag: bool = False):
+    result = {'test_id': test_id, 'test_item_id': test_item_id}
+    # Example url http://127.0.0.1:8000/test/test_id/test_item/1
+    if desc:
+        # Example url http://127.0.0.1:8000/test/test_id/test_item/1?desc=some_desc
+        result.update({'desc': desc})
+    if flag:
+        # Example url http://127.0.0.1:8000/test/test_id/test_item/1?desc=some_desc&flag=1
+        result.update({'flag': flag})
+    return result
+
+
+@app.post('/items')
+async def create_item(item: Item):
+    """I test it with Postman"""
+    item_dict = item.dict()
+    if item.tax:
+        price = item.price + item.price * item.tax
+        item_dict.update({'price with tax': price})
+    return item_dict
+
+
+@app.put('/items/{item_id}')
+async def update_item(item_id: int, item: Item,
+                      some_data: str | None = Query(default=None, min_length=5, max_length=50)):
+    """I test it with Postman"""
+    # Wrong url http://127.0.0.1:8000/items/1?some_data=Another%20data%20big%20usless%20data%20it%20so%20long%20data%20with%20so%20many%20characters
+    result = {"item_id": item_id, **item.dict()}
+    if some_data:
+        result.update({"some_data": some_data})
+    return result
+
+
+@app.get("/something")
+async def get_something(question: list[str] = Query(default=Required, min_length=3)):
+    """"In this case question required parameter
+    You can set a required parameter as a various types
+    Example url http://127.0.0.1:8000/something?question=quest&question=tion
+    """
+    results = {'something': [{"first_name": "Foo"}, {"second_name": "Bar"}]}
+    if question:
+        results.update({"question": question})
+    return results
+
+
+@app.get('/something_else')
+async def get_something_else(
+        question: str | None = Query(default=None, title="String", description="Awesome description", min_length=3,
+                                     alias='some_alias')):
+    """
+    Other options:
+    alias - replace variable name
+    deprecated - mark parameter as deprecated in docs, but he is still using
+    include_in_schema=False - exclude parameter from docs
+    """
+    result = {"something_else": [{"first_name": "Foo"}, {"second_name": "Bar"}]}
+    # Example url http://127.0.0.1:8000/something_else?some_alias=alias
+    if question:
+        result.update({"question": question})
+    return result
